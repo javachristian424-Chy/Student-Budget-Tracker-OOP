@@ -1,4 +1,4 @@
-
+/*runs the application and handles transaction logic */
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -7,19 +7,9 @@ import java.time.LocalDate;
 
 public class Main extends JFrame {
 
+    private DashboardPanel dashboardPanel;
+    private TransactionPanel transactionPanel;
     private BudgetManager manager;
-
-    private JLabel balanceLabel;
-    private JLabel incomeLabel;
-    private JLabel expenseLabel;
-    private JLabel allowanceLabel;
-
-    private JTextField descriptionField;
-    private JTextField amountField;
-    private JComboBox<Category> categoryBox;
-
-    private DefaultTableModel tableModel;
-    private JTable transactionTable;
 
     public Main() {
         manager = BudgetManager.load();
@@ -33,6 +23,7 @@ public class Main extends JFrame {
             }
         }
 
+        // WINDOW SETTINGS
         setTitle("Student Budget Tracker");
         setSize(1100, 650);
         setMinimumSize(new Dimension(850, 500));
@@ -40,131 +31,26 @@ public class Main extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // HEADER
-        JPanel header = new JPanel(new BorderLayout());
-        header.setBackground(new Color(30, 58, 95));
-        header.setBorder(
-            BorderFactory.createEmptyBorder(18, 20, 18, 20)
+        // DASHBOARD
+        dashboardPanel = new DashboardPanel(
+            () -> editStudentProfile()
         );
 
-        JLabel title = new JLabel("Student Budget Tracker");
-        title.setFont(new Font("Arial", Font.BOLD, 25));
-        title.setForeground(Color.WHITE);
+        updateStudentInfo();
+        add(dashboardPanel, BorderLayout.CENTER);
 
-        JLabel studentInfo = new JLabel(
-            "Student: " + manager.getStudent().getName()
-            + " | ID: " + manager.getStudent().getStudentId()
-        );
-        studentInfo.setForeground(Color.WHITE);
-
-        JPanel heading = new JPanel(new GridLayout(2, 1, 4, 4));
-        heading.setOpaque(false);
-        heading.add(title);
-        heading.add(studentInfo);
-
-        header.add(heading, BorderLayout.WEST);
-        add(header, BorderLayout.NORTH);
-
-        // SUMMARY CARDS
-        JPanel summary = new JPanel(new GridLayout(1, 4, 10, 10));
-        summary.setBorder(
-            BorderFactory.createEmptyBorder(12, 15, 12, 15)
+        // TRANSACTION PANEL
+        transactionPanel = new TransactionPanel(
+            manager.getCategories(),
+            () -> addTransaction(true),
+            () -> addTransaction(false),
+            () -> editTransaction(),
+            () -> deleteTransaction()
         );
 
-        balanceLabel = new JLabel();
-        allowanceLabel = new JLabel();
-        incomeLabel = new JLabel();
-        expenseLabel = new JLabel();
+        add(transactionPanel, BorderLayout.SOUTH);
 
-        summary.add(createCard("Remaining Balance", balanceLabel));
-        summary.add(createCard("Starting Allowance", allowanceLabel));
-        summary.add(createCard("Total Income", incomeLabel));
-        summary.add(createCard("Total Expenses", expenseLabel));
-
-        // TRANSACTION TABLE
-        String[] columns = {
-            "Date", "Type", "Description", "Category", "Amount"
-        };
-
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-
-        transactionTable = new JTable(tableModel);
-        transactionTable.setRowHeight(27);
-        transactionTable.setSelectionMode(
-            ListSelectionModel.SINGLE_SELECTION
-        );
-        transactionTable.setAutoCreateRowSorter(true);
-
-        JScrollPane tableScroll = new JScrollPane(transactionTable);
-
-        // INPUT FIELDS
-        descriptionField = new JTextField(12);
-        amountField = new JTextField(8);
-        categoryBox = new JComboBox<>();
-
-        for (Category category : manager.getCategories()) {
-            if (!category.getName().equalsIgnoreCase("Income")) {
-                categoryBox.addItem(category);
-            }
-        }
-
-        // BUTTONS
-        JButton addIncomeButton = new JButton("Add Income");
-        JButton addExpenseButton = new JButton("Add Expense");
-        JButton editButton = new JButton("Edit Selected");
-        JButton deleteButton = new JButton("Delete Selected");
-
-        addIncomeButton.setBackground(new Color(46, 139, 87));
-        addIncomeButton.setForeground(Color.WHITE);
-
-        addExpenseButton.setBackground(new Color(190, 65, 65));
-        addExpenseButton.setForeground(Color.WHITE);
-
-        // ROW 1: INPUT FIELDS
-        JPanel inputPanel = new JPanel(
-            new FlowLayout(FlowLayout.CENTER, 8, 8)
-        );
-
-        inputPanel.add(new JLabel("Description:"));
-        inputPanel.add(descriptionField);
-        inputPanel.add(new JLabel("Amount:"));
-        inputPanel.add(amountField);
-        inputPanel.add(new JLabel("Category:"));
-        inputPanel.add(categoryBox);
-
-        // ROW 2: BUTTONS
-        JPanel buttonPanel = new JPanel(
-            new FlowLayout(FlowLayout.CENTER, 10, 8)
-        );
-
-        buttonPanel.add(addIncomeButton);
-        buttonPanel.add(addExpenseButton);
-        buttonPanel.add(editButton);
-        buttonPanel.add(deleteButton);
-
-        JPanel form = new JPanel(new GridLayout(2, 1, 0, 5));
-        form.add(inputPanel);
-        form.add(buttonPanel);
-
-        // MAIN CONTENT
-        JPanel center = new JPanel(new BorderLayout(5, 5));
-        center.add(summary, BorderLayout.NORTH);
-        center.add(tableScroll, BorderLayout.CENTER);
-        center.add(form, BorderLayout.SOUTH);
-
-        add(center, BorderLayout.CENTER);
-
-        // BUTTON ACTIONS
-        addIncomeButton.addActionListener(e -> addTransaction(true));
-        addExpenseButton.addActionListener(e -> addTransaction(false));
-        editButton.addActionListener(e -> editTransaction());
-        deleteButton.addActionListener(e -> deleteTransaction());
-
+        // LOAD CURRENT DATA
         refreshDashboard();
     }
 
@@ -204,17 +90,24 @@ public class Main extends JFrame {
                     allowanceField.getText().trim()
                 );
 
+                if (name.isEmpty() || id.isEmpty()
+                        || !Double.isFinite(allowance)
+                        || allowance < 0) {
+                    throw new IllegalArgumentException(
+                        "Enter a valid name, ID, and non-negative allowance."
+                    );
+                }
+
                 Student student = new Student(name, id, allowance);
                 BudgetManager newManager = new BudgetManager(student);
-
                 newManager.save();
+
                 return newManager;
 
             } catch (IllegalArgumentException | IOException ex) {
                 JOptionPane.showMessageDialog(
                     null,
-                    "Please check your information.\n"
-                    + ex.getMessage(),
+                    "Please check your information.\n" + ex.getMessage(),
                     "Invalid Information",
                     JOptionPane.ERROR_MESSAGE
                 );
@@ -222,36 +115,135 @@ public class Main extends JFrame {
         }
     }
 
-    // SUMMARY CARD DESIGN
-    private JPanel createCard(String title, JLabel value) {
-        JPanel card = new JPanel(new GridLayout(2, 1, 5, 5));
+    // UPDATE STUDENT INFORMATION
+    private void updateStudentInfo() {
+        dashboardPanel.studentInfoLabel.setText(
+            "Student: " + manager.getStudent().getName()
+            + " | ID: " + manager.getStudent().getStudentId()
+        );
+    }
 
-        card.setBorder(
-            BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.LIGHT_GRAY),
-                BorderFactory.createEmptyBorder(12, 10, 12, 10)
-            )
+    // EDIT STUDENT PROFILE
+    private void editStudentProfile() {
+        Student student = manager.getStudent();
+
+        JTextField nameField = new JTextField(student.getName());
+        JTextField idField = new JTextField(student.getStudentId());
+
+        JTextField allowanceField = new JTextField(
+            String.valueOf(student.getAllowance())
         );
 
-        JLabel heading = new JLabel(title);
-        heading.setForeground(Color.DARK_GRAY);
+        JPanel panel = new JPanel(new GridLayout(3, 2, 8, 8));
 
-        value.setFont(new Font("Arial", Font.BOLD, 19));
+        panel.add(new JLabel("Student Name:"));
+        panel.add(nameField);
+        panel.add(new JLabel("Student ID:"));
+        panel.add(idField);
+        panel.add(new JLabel("Starting Allowance (PHP):"));
+        panel.add(allowanceField);
 
-        card.add(heading);
-        card.add(value);
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            panel,
+            "Edit Student Profile",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE
+        );
 
-        return card;
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+
+        String newName = nameField.getText().trim();
+        String newId = idField.getText().trim();
+        double newAllowance;
+
+        try {
+            newAllowance = Double.parseDouble(
+                allowanceField.getText().trim()
+            );
+
+            if (newName.isEmpty() || newId.isEmpty()) {
+                throw new IllegalArgumentException(
+                    "Name and student ID cannot be empty."
+                );
+            }
+
+            if (!Double.isFinite(newAllowance) || newAllowance < 0) {
+                throw new IllegalArgumentException(
+                    "Allowance must be a valid, non-negative amount."
+                );
+            }
+
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(
+                this,
+                "Enter a valid allowance amount.",
+                "Invalid Input",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(
+                this,
+                ex.getMessage(),
+                "Invalid Input",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        String oldName = student.getName();
+        String oldId = student.getStudentId();
+        double oldAllowance = student.getAllowance();
+
+        student.setName(newName);
+        student.setStudentId(newId);
+        student.setAllowance(newAllowance);
+
+        try {
+            manager.save();
+            updateStudentInfo();
+            refreshDashboard();
+
+            JOptionPane.showMessageDialog(
+                this,
+                "Student profile updated successfully!",
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+
+        } catch (IOException ex) {
+            student.setName(oldName);
+            student.setStudentId(oldId);
+            student.setAllowance(oldAllowance);
+
+            updateStudentInfo();
+            refreshDashboard();
+
+            JOptionPane.showMessageDialog(
+                this,
+                "Could not save your profile.\n" + ex.getMessage(),
+                "Save Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
 
     // ADD INCOME OR EXPENSE
     private void addTransaction(boolean isIncome) {
-        String description = descriptionField.getText().trim();
-        String amountText = amountField.getText().trim();
+        String description =
+            transactionPanel.descriptionField.getText().trim();
+
+        String amountText =
+            transactionPanel.amountField.getText().trim();
 
         if (description.isEmpty() || amountText.isEmpty()) {
             JOptionPane.showMessageDialog(
-                this, "Enter a description and amount."
+                this,
+                "Enter a description and amount."
             );
             return;
         }
@@ -261,7 +253,8 @@ public class Main extends JFrame {
 
             if (!Double.isFinite(amount) || amount <= 0) {
                 JOptionPane.showMessageDialog(
-                    this, "Amount must be greater than zero."
+                    this,
+                    "Amount must be greater than zero."
                 );
                 return;
             }
@@ -271,12 +264,14 @@ public class Main extends JFrame {
             if (isIncome) {
                 category = manager.getCategory("Income");
             } else {
-                category = (Category) categoryBox.getSelectedItem();
+                category = (Category)
+                    transactionPanel.categoryBox.getSelectedItem();
             }
 
             if (category == null) {
                 JOptionPane.showMessageDialog(
-                    this, "Please select a category."
+                    this,
+                    "Please select a category."
                 );
                 return;
             }
@@ -285,11 +280,17 @@ public class Main extends JFrame {
 
             if (isIncome) {
                 transaction = new Income(
-                    description, amount, LocalDate.now(), category
+                    description,
+                    amount,
+                    LocalDate.now(),
+                    category
                 );
             } else {
                 transaction = new Expense(
-                    description, amount, LocalDate.now(), category
+                    description,
+                    amount,
+                    LocalDate.now(),
+                    category
                 );
             }
 
@@ -311,8 +312,8 @@ public class Main extends JFrame {
 
             refreshDashboard();
 
-            descriptionField.setText("");
-            amountField.setText("");
+            transactionPanel.descriptionField.setText("");
+            transactionPanel.amountField.setText("");
 
             if (!isIncome) {
                 String warning = manager.checkLimit(category);
@@ -324,7 +325,8 @@ public class Main extends JFrame {
 
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(
-                this, "Enter a valid amount, such as 150.00."
+                this,
+                "Enter a valid amount, such as 150.00."
             );
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage());
@@ -333,16 +335,20 @@ public class Main extends JFrame {
 
     // EDIT SELECTED TRANSACTION
     private void editTransaction() {
+        JTable transactionTable = dashboardPanel.transactionTable;
+
         int selectedRow = transactionTable.getSelectedRow();
 
         if (selectedRow < 0) {
             JOptionPane.showMessageDialog(
-                this, "Select a transaction in the table first."
+                this,
+                "Select a transaction in the table first."
             );
             return;
         }
 
-        int modelRow = transactionTable.convertRowIndexToModel(selectedRow);
+        int modelRow =
+            transactionTable.convertRowIndexToModel(selectedRow);
 
         Transaction oldTransaction =
             manager.getTransactions().get(modelRow);
@@ -354,6 +360,7 @@ public class Main extends JFrame {
             new JTextField(String.valueOf(oldTransaction.getAmount()));
 
         JPanel panel = new JPanel(new GridLayout(2, 2, 8, 8));
+
         panel.add(new JLabel("Description:"));
         panel.add(descriptionInput);
         panel.add(new JLabel("Amount:"));
@@ -373,13 +380,13 @@ public class Main extends JFrame {
 
         try {
             String description = descriptionInput.getText().trim();
+
             double amount = Double.parseDouble(
                 amountInput.getText().trim()
             );
 
             if (description.isEmpty()
-                    || !Double.isFinite(amount)
-                    || amount <= 0) {
+                    || !Double.isFinite(amount) || amount <= 0) {
                 throw new IllegalArgumentException(
                     "Enter a description and a positive amount."
                 );
@@ -422,12 +429,14 @@ public class Main extends JFrame {
             refreshDashboard();
 
             JOptionPane.showMessageDialog(
-                this, "Transaction updated successfully!"
+                this,
+                "Transaction updated successfully!"
             );
 
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(
-                this, "Enter a valid amount."
+                this,
+                "Enter a valid amount."
             );
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage());
@@ -436,16 +445,20 @@ public class Main extends JFrame {
 
     // DELETE SELECTED TRANSACTION
     private void deleteTransaction() {
+        JTable transactionTable = dashboardPanel.transactionTable;
+
         int selectedRow = transactionTable.getSelectedRow();
 
         if (selectedRow < 0) {
             JOptionPane.showMessageDialog(
-                this, "Select a transaction in the table first."
+                this,
+                "Select a transaction in the table first."
             );
             return;
         }
 
-        int modelRow = transactionTable.convertRowIndexToModel(selectedRow);
+        int modelRow =
+            transactionTable.convertRowIndexToModel(selectedRow);
 
         int confirm = JOptionPane.showConfirmDialog(
             this,
@@ -458,7 +471,8 @@ public class Main extends JFrame {
             return;
         }
 
-        Transaction removed = manager.getTransactions().get(modelRow);
+        Transaction removed =
+            manager.getTransactions().get(modelRow);
 
         if (manager.removeTransaction(modelRow)) {
             try {
@@ -477,25 +491,26 @@ public class Main extends JFrame {
 
     // REFRESH DASHBOARD
     private void refreshDashboard() {
-        double balance = manager.getRemainingBalance();
+        dashboardPanel.balanceLabel.setText(
+            String.format("₱%,.2f", manager.getRemainingBalance())
+        );
 
-        balanceLabel.setText(String.format("₱%,.2f", balance));
-
-        allowanceLabel.setText(
+        dashboardPanel.allowanceLabel.setText(
             String.format(
                 "₱%,.2f",
                 manager.getStudent().getAllowance()
             )
         );
 
-        incomeLabel.setText(
+        dashboardPanel.incomeLabel.setText(
             String.format("₱%,.2f", manager.getTotalIncome())
         );
 
-        expenseLabel.setText(
+        dashboardPanel.expenseLabel.setText(
             String.format("₱%,.2f", manager.getTotalExpenses())
         );
 
+        DefaultTableModel tableModel = dashboardPanel.tableModel;
         tableModel.setRowCount(0);
 
         for (Transaction transaction : manager.getTransactions()) {
